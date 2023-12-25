@@ -1,12 +1,17 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
+import * as React from 'react'
+import * as ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import RssPage from './routes/Discover/Rss'
-import WorksPage from './routes/Works'
+import { initializeIcons } from '@fluentui/react/lib/Icons'
+
+import { FluentProvider, teamsLightTheme } from '@fluentui/react-components'
 import Layout from './components/MainLayout'
 import CenterPage from './routes/Center'
 import LoginPage from './routes/Login'
+import RssSubscribedPage from './routes/RssSubscribed'
+import HomePage from './routes/Home'
 import './index.css'
+
+initializeIcons()
 
 const router = createBrowserRouter([
   {
@@ -19,17 +24,17 @@ const router = createBrowserRouter([
     children: [
       {
         path: '/discover',
-        element: <RssPage />,
+        element: <HomePage />,
       },
     ],
   },
   {
-    path: '/works',
+    path: '/rss',
     element: <Layout />,
     children: [
       {
-        path: '/works',
-        element: <WorksPage />,
+        path: '/rss',
+        element: <RssSubscribedPage />,
       },
     ],
   },
@@ -47,6 +52,8 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>
+    <FluentProvider theme={teamsLightTheme}>
+      <RouterProvider router={router} />
+    </FluentProvider>
+  </React.StrictMode>,
 )

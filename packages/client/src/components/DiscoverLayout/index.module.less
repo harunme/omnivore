@@ -4,78 +4,163 @@
   display: flex;
   flex-shrink: 0;
   align-self: stretch;
-  // border: 1px solid;
+  width: 100vw;
+  height: 100vh;
 
-  .left {
-    // height: 982px;
-    height: calc(100vh - 60px);
-    .navItem,
-    .navItem5 {
-      width: 223px;
-
-      .iconIntro,
-      .iconRadio {
-        height: 20px;
-        position: relative;
-        width: 20px;
+  @media screen and (max-width: 930px) {
+    .left-side:not(.active) {
+      width: 56px;
+      overflow: hidden;
+    }
+    .left-side-button {
+      > svg {
+        transition: 0.2s;
+        width: 24px;
       }
     }
-
-    .navItem1,
-    .navItem2,
-    .navItem3,
-    .navItem4,
-    .navItem6,
-    .navItem7 {
-      width: 223px;
-
-      .iconHeart,
-      .iconCalendar,
-      .iconCheckbox,
-      .iconCalendar,
-      .iconList,
-      .iconToast {
-        height: 20px;
-        width: 20px;
+    .logo {
+      writing-mode: vertical-lr;
+      transform: rotate(180deg);
+      transform-origin: bottom;
+      display: flex;
+      align-items: center;
+      margin-top: -10px;
+    }
+    .side-wrapper {
+      opacity: 0;
+    }
+  }
+  .left-side.collapsed {
+    width: 56px;
+    overflow: hidden;
+    > svg {
+      transition: 0.2s;
+      width: 24px;
+    }
+    .side-wrapper {
+      opacity: 0;
+    }
+    .logo {
+      writing-mode: vertical-lr;
+      transform: rotate(180deg);
+      transform-origin: bottom;
+      display: flex;
+      align-items: center;
+      margin-top: -10px;
+    }
+  }
+  .left-side {
+    width: 200px;
+    height: 100%;
+    // border-right: 1px solid #272a3a;
+    display: flex;
+    flex-direction: column;
+    transition: 0.3s;
+    background-color: #151728;
+    overflow: auto;
+    flex-shrink: 0;
+    position: relative;
+    .left-side-button {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+      height: 60px;
+      background-color: rgba(39, 42, 58, 0.5);
+      border: 0;
+      padding: 0;
+      line-height: 0;
+      color: #fff;
+      border-bottom: 1px solid #272a3a;
+      > svg {
+        width: 24px;
+        color: #fff;
+      }
+    }
+    .logo {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      color: #fff;
+      font-weight: 600;
+      text-align: center;
+      height: 68px;
+      line-height: 68px;
+      letter-spacing: 4px;
+      position: sticky;
+      top: 0;
+      background: linear-gradient(
+        to bottom,
+        #151728 0%,
+        #151728 76%,
+        rgba(21, 23, 40, 0) 100%
+      );
+    }
+    .side-wrapper {
+      padding: 30px;
+      .side-title {
+        font-family: 'DM Sans', sans-serif;
+        color: #5c5e6e;
+        font-size: 15px;
+        font-weight: 600;
+        margin-bottom: 20px;
+      }
+      .side-menu {
+        display: flex;
+        flex-direction: column;
+        font-size: 15px;
+        white-space: nowrap;
+        a {
+          text-decoration: none;
+          color: #9c9cab;
+          display: flex;
+          align-items: center;
+          &:hover {
+            color: #fff;
+          }
+        }
+        a:not(:last-child) {
+          margin-bottom: 20px;
+        }
+      }
+    }
+    .footer {
+      width: 100%;
+      height: 62px;
+      position: absolute;
+      bottom: 0;
+      cursor: pointer;
+      display: flex;
+      padding-left: 8px;
+      align-items: center;
+      justify-content: center;
+      > div {
+        display: flex;
+        align-items: center;
+        > img {
+          width: 42px;
+          height: 42px;
+          border-radius: 21px;
+        }
+        > span {
+          display: inline-block;
+          margin-left: 8px;
+          color: #9c9cab;
+          font-size: 18px;
+          font-weight: 600;
+        }
       }
     }
   }
 
   .right {
-    border: 1px solid;
-    align-items: flex-start;
     display: flex;
     flex-basis: 0;
     flex-direction: column;
-    padding: 40px 0px 0px 40px;
+    padding: 40px 40px 40px 40px;
     row-gap: 24px;
     flex-grow: 1;
-
-    .item {
-      min-width: 90px;
-      vertical-align: middle;
-      flex-shrink: 0;
-    }
-
-    .frame1321317607 {
-      align-items: center;
-      background: var(--semi-color-fill-0);
-      border-radius: 12px;
-      display: flex;
-      flex-direction: row;
-      height: 20px;
-      overflow: hidden;
-      padding: 220px 499px;
-      flex-shrink: 0;
-      color: var(--semi-color-disabled-text);
-      font-size: 14px;
-      letter-spacing: -0.14px;
-      line-height: 20px;
-
-      .yourContentHere {
-        vertical-align: middle;
-        min-width: 123px;
-      }
-    }
+    height: 100%;
   }
 }

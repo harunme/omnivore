@@ -1,52 +1,62 @@
-import React from 'react'
-import { Outlet } from 'react-router-dom'
-import { Nav, Avatar } from '@douyinfe/semi-ui'
-import {
-  IconSemiLogo,
-  IconFeishuLogo,
-  IconHelpCircle,
-  IconBell,
-} from '@douyinfe/semi-icons'
-import {
-  IconIntro,
-  IconHeart,
-  IconCalendar,
-  IconCheckbox,
-  IconRadio,
-  IconList,
-  IconToast,
-} from '@douyinfe/semi-icons-lab'
+import { useGetSubscriptionsQuery } from '@/lib/networking/queries/useGetSubscriptionsQuery'
 import styles from './index.module.less'
+import { useState } from 'react'
 
 export default (props: any) => {
+  const { subscriptions } = useGetSubscriptionsQuery()
+  const [collapsed, setCollapsed] = useState(false)
   return (
     <div className={styles.main}>
-      <Nav
-        defaultOpenKeys={['user', 'union']}
-        bodyStyle={{ height: 918 }}
-        mode="vertical"
-        footer={{ collapseButton: true }}
-        className={styles.left}
+      <div
+        className={`${styles['left-side']} ${
+          collapsed ? styles['collapsed'] : ''
+        }`}
       >
-        <Nav.Item
-          itemKey="Home"
-          text="首页"
-          icon={<IconIntro className={styles.iconIntro} />}
-          className={styles.navItem}
-        />
-        <Nav.Item
-          itemKey="Dashboard"
-          text="你的收藏"
-          icon={<IconHeart className={styles.iconHeart} />}
-          className={styles.navItem1}
-        />
-        <Nav.Item
-          itemKey="Project"
-          text="订阅内容"
-          icon={<IconToast className={styles.iconToast} />}
-          className={styles.navItem2}
-        />
-      </Nav>
+        <div className={styles['left-side-button']}>
+          {collapsed ? (
+            <svg
+              onClick={() => setCollapsed(false)}
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          ) : (
+            <svg
+              onClick={() => setCollapsed(true)}
+              stroke="currentColor"
+              stroke-width="2"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              viewBox="0 0 24 24"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7"></path>
+            </svg>
+          )}
+        </div>
+        <div className={styles['logo']}>ZDAY</div>
+        <div className={styles['side-wrapper']}>
+          <div className={styles['side-menu']}>
+            <a href="/discover">发现</a>
+            <a href="/center">偏好设置</a>
+          </div>
+        </div>
+        <div className={styles['side-wrapper']}>
+          <div className={styles['side-title']}>订阅源</div>
+          <div className={styles['side-menu']}>
+            {subscriptions.map(({ name }) => (
+              <a href="/rss">{name}</a>
+            ))}
+          </div>
+        </div>
+      </div>
       <div className={styles.right}>{props.children}</div>
     </div>
   )
