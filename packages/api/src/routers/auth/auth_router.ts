@@ -395,8 +395,7 @@ export function authRouter() {
       }
 
       await setAuthInCookie({ uid: user.id }, res)
-
-      return res.redirect(redirectUri)
+      res.status(200).send({ errorCode: 200 })
     } catch (error) {
       logger.info('handleSuccessfulLogin exception:', error)
       return res.redirect(`${env.client.url}/login?errorCodes=AUTH_FAILED`)
@@ -425,17 +424,17 @@ export function authRouter() {
         )
       }
       if (!isValidLoginRequest(req.body)) {
-        return res.redirect(
-          `${env.client.url}/auth/email-login?errorCodes=${LoginErrorCode.InvalidCredentials}`
-        )
+        return res
+          .status(200)
+          .send({ errorCode: LoginErrorCode.InvalidCredentials })
       }
       const { email, password } = req.body
       try {
         const user = await userRepository.findByEmail(email.trim())
         if (!user || user.status === StatusType.Deleted) {
-          return res.redirect(
-            `${env.client.url}/auth/email-login?errorCodes=${LoginErrorCode.UserNotFound}`
-          )
+          return res
+            .status(200)
+            .send({ errorCode: LoginErrorCode.UserNotFound })
         }
 
         if (user.status === StatusType.Pending && user.email) {
@@ -444,23 +443,23 @@ export function authRouter() {
             email: user.email,
             name: user.name,
           })
-          return res.redirect(
-            `${env.client.url}/auth/email-login?errorCodes=PENDING_VERIFICATION`
-          )
+          return res.status(200).send({ errorCode: 'PENDING_VERIFICATION' })
+
+          // return res.redirect(
+          //   // `${env.client.url}/auth/email-login?errorCodes=PENDING_VERIFICATION`
+          // )
         }
 
         if (!user?.password) {
           // user has no password, so they need to set one
-          return res.redirect(
-            `${env.client.url}/auth/email-login?errorCodes=${LoginErrorCode.WrongSource}`
-          )
+          return res.status(200).send()
         }
         // check if password is correct
         const validPassword = await comparePassword(password, user.password)
         if (!validPassword) {
-          return res.redirect(
-            `${env.client.url}/auth/email-login?errorCodes=${LoginErrorCode.InvalidCredentials}`
-          )
+          return res
+            .status(200)
+            .send({ errorCode: LoginErrorCode.InvalidCredentials })
         }
 
         analytics.track({
@@ -474,12 +473,11 @@ export function authRouter() {
           },
         })
 
-        await handleSuccessfulLogin(req, res, user, false)
+        await setAuthInCookie({ uid: user.id }, res)
+        return res.status(200).send({ user })
       } catch (e) {
         logger.info('email-login exception:', e)
-        res.redirect(
-          `${env.client.url}/auth/email-login?errorCodes=AUTH_FAILED`
-        )
+        return res.status(200).send({ errorCode: 'AUTH_FAILED' })
       }
     }
   )
