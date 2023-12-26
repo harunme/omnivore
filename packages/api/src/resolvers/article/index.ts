@@ -21,11 +21,15 @@ import {
   CreateArticleError,
   CreateArticleErrorCode,
   CreateArticleSuccess,
+  FetchContentError,
+  FetchContentErrorCode,
+  FetchContentSuccess,
   MoveToFolderError,
   MoveToFolderErrorCode,
   MoveToFolderSuccess,
   MutationBulkActionArgs,
   MutationCreateArticleArgs,
+  MutationFetchContentArgs,
   MutationMoveToFolderArgs,
   MutationSaveArticleReadingProgressArgs,
   MutationSetBookmarkArticleArgs,
@@ -61,15 +65,17 @@ import { createPageSaveRequest } from '../../services/create_page_save_request'
 import { findHighlightsByLibraryItemId } from '../../services/highlights'
 import {
   addLabelsToLibraryItem,
+  createAndSaveLabelsInLibraryItem,
   findLabelsByIds,
   findOrCreateLabels,
-  saveLabelsInLibraryItem,
 } from '../../services/labels'
 import {
   createLibraryItem,
+  findLibraryItemById,
   findLibraryItemByUrl,
   findLibraryItemsByPrefix,
   searchLibraryItems,
+  sortParamsToSort,
   updateLibraryItem,
   updateLibraryItemReadingProgress,
   updateLibraryItems,
@@ -89,7 +95,6 @@ import {
   generateSlug,
   isParsingTimeout,
   libraryItemToArticle,
-  libraryItemToArticleSavingRequest,
   libraryItemToSearchItem,
   titleForFilePath,
   userDataToUser,
@@ -101,11 +106,6 @@ import {
   ParsedContentPuppeteer,
   parsePreparedContent,
 } from '../../utils/parser'
-import {
-  InFilter,
-  parseSearchQuery,
-  sortParamsToSort,
-} from '../../utils/search'
 import { getStorageFileDetails } from '../../utils/uploads'
 import { itemTypeForContentType } from '../upload_files'
 
@@ -143,6 +143,9 @@ export const createArticleResolver = authorized<
         state,
         labels: inputLabels,
         folder,
+        rssFeedUrl,
+        savedAt,
+        publishedAt,
       },
     },
     { log, uid, pubsub }
@@ -220,9 +223,11 @@ export const createArticleResolver = authorized<
           readingProgressAnchorIndex: 0,
           readingProgressPercent: 0,
           highlights: [],
-          savedAt: new Date(),
+          savedAt: savedAt || new Date(),
           updatedAt: new Date(),
           folder: '',
+          publishedAt,
+          subscription: rssFeedUrl,
         },
       }
 
@@ -257,6 +262,9 @@ export const createArticleResolver = authorized<
           state: state || undefined,
           labels: inputLabels || undefined,
           folder: folder || undefined,
+          savedAt,
+          publishedAt,
+          subscription: rssFeedUrl || undefined,
         })
         return DUMMY_RESPONSE
       } else if (!skipParsing && preparedDocument?.document) {
@@ -279,6 +287,9 @@ export const createArticleResolver = authorized<
           state: state || undefined,
           labels: inputLabels || undefined,
           folder: folder || undefined,
+          savedAt,
+          publishedAt,
+          subscription: rssFeedUrl || undefined,
         })
         return DUMMY_RESPONSE
       }
@@ -299,6 +310,9 @@ export const createArticleResolver = authorized<
         uploadFileId,
         state,
         folder,
+        publishedAt,
+        rssFeedUrl,
+        savedAt,
       })
 
       log.info('New article saving', {
@@ -346,11 +360,12 @@ export const createArticleResolver = authorized<
         )
       }
 
-      // save labels in item
-      if (inputLabels) {
-        const labels = await findOrCreateLabels(inputLabels, user.id)
-        await saveLabelsInLibraryItem(labels, libraryItemToReturn.id, user.id)
-      }
+      await createAndSaveLabelsInLibraryItem(
+        libraryItemToReturn.id,
+        uid,
+        inputLabels,
+        rssFeedUrl
+      )
 
       log.info(
         'item created in database',
@@ -405,7 +420,6 @@ export const getArticleResolver = authorized<
           deletedAt: IsNull(),
         },
         relations: {
-          labels: true,
           highlights: {
             user: true,
             labels: true,
@@ -655,16 +669,15 @@ export const searchResolver = authorized<
     return { errorCodes: [SearchErrorCode.QueryTooLong] }
   }
 
-  const searchQuery = parseSearchQuery(params.query || undefined)
-
   const { libraryItems, count } = await searchLibraryItems(
     {
       from: Number(startCursor),
       size: first + 1, // fetch one more item to get next cursor
-      sort: searchQuery.sort,
       includePending: true,
       includeContent: !!params.includeContent,
-      ...searchQuery,
+      includeDeleted: params.query?.includes('in:trash'),
+      query: params.query,
+      useFolders: params.query?.includes('use:folders'),
     },
     uid
   )
@@ -751,8 +764,6 @@ export const updatesSinceResolver = authorized<
   UpdatesSinceError,
   QueryUpdatesSinceArgs
 >(async (_obj, { since, first, after, sort: sortParams, folder }, { uid }) => {
-  const sort = sortParamsToSort(sortParams)
-
   const startCursor = after || ''
   const size = Math.min(first || 10, 100) // limit to 100 items
   let startDate = new Date(since)
@@ -760,15 +771,19 @@ export const updatesSinceResolver = authorized<
     // for android app compatibility
     startDate = new Date(0)
   }
+  const sort = sortParamsToSort(sortParams)
+
+  // create a search query
+  const query = `updated:${startDate.toISOString()}${
+    folder ? ' in:' + folder : ''
+  } sort:${sort.by}-${sort.order}`
 
   const { libraryItems, count } = await searchLibraryItems(
     {
       from: Number(startCursor),
       size: size + 1, // fetch one more item to get next cursor
       includeDeleted: true,
-      dateFilters: [{ field: 'updatedAt', startDate }],
-      sort,
-      inFilter: (folder as InFilter) || InFilter.ALL,
+      query,
     },
     uid
   )
@@ -826,9 +841,12 @@ export const bulkActionResolver = authorized<
         },
       })
 
-      // parse query
-      const searchQuery = parseSearchQuery(query)
-      if (searchQuery.ids.length > 100) {
+      // the query size is limited to 4000 characters to allow for 100 items
+      if (!query || query.length > 4000) {
+        log.error('bulkActionResolver error', {
+          error: 'QueryTooLong',
+          query,
+        })
         return { errorCodes: [BulkActionErrorCode.BadRequest] }
       }
 
@@ -842,7 +860,16 @@ export const bulkActionResolver = authorized<
         labels = await findLabelsByIds(labelIds, uid)
       }
 
-      await updateLibraryItems(action, searchQuery, uid, labels, args)
+      await updateLibraryItems(
+        action,
+        {
+          query,
+          useFolders: query.includes('use:folders'),
+        },
+        uid,
+        labels,
+        args
+      )
 
       return { success: true }
     } catch (error) {
@@ -889,7 +916,7 @@ export const moveToFolderResolver = authorized<
   MoveToFolderSuccess,
   MoveToFolderError,
   MutationMoveToFolderArgs
->(async (_, { id, folder }, { authTrx, pubsub, uid }) => {
+>(async (_, { id, folder }, { authTrx, log, pubsub, uid }) => {
   analytics.track({
     userId: uid,
     event: 'move_to_folder',
@@ -922,24 +949,6 @@ export const moveToFolderResolver = authorized<
 
   const savedAt = new Date()
 
-  // // if the content is not fetched yet, create a page save request
-  // if (!item.readableContent) {
-  //   const articleSavingRequest = await createPageSaveRequest({
-  //     userId: uid,
-  //     url: item.originalUrl,
-  //     articleSavingRequestId: id,
-  //     priority: 'high',
-  //     publishedAt: item.publishedAt || undefined,
-  //     savedAt,
-  //     pubsub,
-  //   })
-
-  //   return {
-  //     __typename: 'MoveToFolderSuccess',
-  //     articleSavingRequest,
-  //   }
-  // }
-
   await updateLibraryItem(
     item.id,
     {
@@ -950,8 +959,73 @@ export const moveToFolderResolver = authorized<
     pubsub
   )
 
+  // if the content is not fetched yet, create a page save request
+  if (item.state === LibraryItemState.ContentNotFetched) {
+    try {
+      await createPageSaveRequest({
+        userId: uid,
+        url: item.originalUrl,
+        articleSavingRequestId: id,
+        priority: 'high',
+        publishedAt: item.publishedAt || undefined,
+        savedAt,
+        folder,
+        pubsub,
+      })
+    } catch (error) {
+      log.error('moveToFolderResolver error', error)
+
+      return {
+        errorCodes: [MoveToFolderErrorCode.BadRequest],
+      }
+    }
+  }
+
   return {
-    __typename: 'MoveToFolderSuccess',
+    success: true,
+  }
+})
+
+export const fetchContentResolver = authorized<
+  FetchContentSuccess,
+  FetchContentError,
+  MutationFetchContentArgs
+>(async (_, { id }, { uid, log, pubsub }) => {
+  analytics.track({
+    userId: uid,
+    event: 'fetch_content',
+    properties: {
+      id,
+    },
+  })
+
+  const item = await findLibraryItemById(id, uid)
+  if (!item) {
+    return {
+      errorCodes: [FetchContentErrorCode.Unauthorized],
+    }
+  }
+
+  // if the content is not fetched yet, create a page save request
+  if (item.state === LibraryItemState.ContentNotFetched) {
+    try {
+      await createPageSaveRequest({
+        userId: uid,
+        url: item.originalUrl,
+        articleSavingRequestId: id,
+        priority: 'high',
+        pubsub,
+      })
+    } catch (error) {
+      log.error('fetchContentResolver error', error)
+
+      return {
+        errorCodes: [FetchContentErrorCode.BadRequest],
+      }
+    }
+  }
+
+  return {
     success: true,
   }
 })

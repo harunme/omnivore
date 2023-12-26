@@ -1,9 +1,8 @@
 import { DeepPartial, FindOptionsWhere, In } from 'typeorm'
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity'
-import { EntityLabel } from '../entity/entity_label'
+import { EntityLabel, LabelSource } from '../entity/entity_label'
 import { Label } from '../entity/label'
-import { LibraryItem } from '../entity/library_item'
-import { createPubSubClient, EntityType } from '../pubsub'
+import { createPubSubClient, EntityType, PubsubClient } from '../pubsub'
 import { authTrx } from '../repository'
 import { CreateLabelInput, labelRepository } from '../repository/label'
 import { libraryItemRepository } from '../repository/library_item'
@@ -11,6 +10,7 @@ import { libraryItemRepository } from '../repository/library_item'
 type AddLabelsToLibraryItemEvent = {
   pageId: string
   labels: DeepPartial<Label>[]
+  source?: LabelSource
 }
 type AddLabelsToHighlightEvent = {
   highlightId: string
@@ -36,41 +36,60 @@ export const findOrCreateLabels = async (
   labels: CreateLabelInput[],
   userId: string
 ): Promise<Label[]> => {
-  return authTrx(
-    async (tx) => {
-      const labelRepo = tx.withRepository(labelRepository)
-      // find existing labels
-      const labelEntities = await labelRepo.findByNames(
-        labels.map((l) => l.name),
-        userId
-      )
-
-      const existingLabelsInLowerCase = labelEntities.map((l) =>
-        l.name.toLowerCase()
-      )
-      const newLabels = labels.filter(
-        (l) => !existingLabelsInLowerCase.includes(l.name.toLowerCase())
-      )
-      if (newLabels.length === 0) {
-        return labelEntities
-      }
-
-      // create new labels
-      const newLabelEntities = await labelRepo.createLabels(newLabels, userId)
-
-      return [...labelEntities, ...newLabelEntities]
-    },
+  // create labels if not exist
+  await authTrx(
+    async (tx) =>
+      tx.withRepository(labelRepository).createLabels(labels, userId),
     undefined,
     userId
   )
+
+  // find labels
+  return authTrx(
+    async (tx) =>
+      tx.withRepository(labelRepository).findByNames(
+        labels.map((l) => l.name),
+        userId
+      ),
+    undefined,
+    userId
+  )
+}
+
+export const createAndSaveLabelsInLibraryItem = async (
+  libraryItemId: string,
+  userId: string,
+  labels?: CreateLabelInput[] | null,
+  rssFeedUrl?: string | null,
+  source?: LabelSource,
+  pubsub?: PubsubClient
+) => {
+  if (rssFeedUrl) {
+    // add rss label to labels
+    labels = (labels || []).concat({ name: 'RSS' })
+    source = 'system'
+  }
+
+  // save labels in item
+  if (labels && labels.length > 0) {
+    const newLabels = await findOrCreateLabels(labels, userId)
+
+    await saveLabelsInLibraryItem(
+      newLabels,
+      libraryItemId,
+      userId,
+      source,
+      pubsub
+    )
+  }
 }
 
 export const saveLabelsInLibraryItem = async (
   labels: Label[],
   libraryItemId: string,
   userId: string,
-  pubsub = createPubSubClient(),
-  skipPubSub = false
+  source: LabelSource = 'user',
+  pubsub = createPubSubClient()
 ) => {
   await authTrx(
     async (tx) => {
@@ -86,6 +105,7 @@ export const saveLabelsInLibraryItem = async (
         labels.map((l) => ({
           labelId: l.id,
           libraryItemId,
+          source,
         }))
       )
     },
@@ -93,24 +113,22 @@ export const saveLabelsInLibraryItem = async (
     userId
   )
 
-  if (skipPubSub) {
-    return
+  if (source === 'user') {
+    // create pubsub event
+    await pubsub.entityCreated<AddLabelsToLibraryItemEvent>(
+      EntityType.LABEL,
+      { pageId: libraryItemId, labels, source },
+      userId
+    )
   }
-
-  // create pubsub event
-  await pubsub.entityCreated<AddLabelsToLibraryItemEvent>(
-    EntityType.LABEL,
-    { pageId: libraryItemId, labels },
-    userId
-  )
 }
 
 export const addLabelsToLibraryItem = async (
   labels: Label[],
   libraryItemId: string,
   userId: string,
-  pubsub = createPubSubClient(),
-  skipPubSub = false
+  source: LabelSource = 'user',
+  pubsub = createPubSubClient()
 ) => {
   await authTrx(
     async (tx) => {
@@ -127,6 +145,7 @@ export const addLabelsToLibraryItem = async (
         labels.map((l) => ({
           labelId: l.id,
           libraryItemId,
+          source,
         }))
       )
     },
@@ -134,16 +153,14 @@ export const addLabelsToLibraryItem = async (
     userId
   )
 
-  if (skipPubSub) {
-    return
+  if (source === 'user') {
+    // create pubsub event
+    await pubsub.entityCreated<AddLabelsToLibraryItemEvent>(
+      EntityType.LABEL,
+      { pageId: libraryItemId, labels, source },
+      userId
+    )
   }
-
-  // create pubsub event
-  await pubsub.entityCreated<AddLabelsToLibraryItemEvent>(
-    EntityType.LABEL,
-    { pageId: libraryItemId, labels },
-    userId
-  )
 }
 
 export const saveLabelsInHighlight = async (
@@ -260,23 +277,19 @@ export const findLabelById = async (id: string, userId: string) => {
 export const findLabelsByLibraryItemId = async (
   libraryItemId: string,
   userId: string
-) => {
+): Promise<(Label & { source: string })[]> => {
   return authTrx(
-    async (tx) =>
-      tx
-        .createQueryBuilder(Label, 'label')
-        .innerJoin(
-          EntityLabel,
-          'entityLabel',
-          'entityLabel.label_id = label.id'
-        )
-        .innerJoin(
-          LibraryItem,
-          'LibraryItem',
-          'LibraryItem.id = entityLabel.library_item_id'
-        )
-        .where('LibraryItem.id = :libraryItemId', { libraryItemId })
-        .getMany(),
+    async (tx) => {
+      const entityLabels = await tx.getRepository(EntityLabel).find({
+        where: { libraryItemId },
+        relations: ['label'],
+      })
+
+      return entityLabels.map((el) => ({
+        ...el.label,
+        source: el.source,
+      }))
+    },
     undefined,
     userId
   )

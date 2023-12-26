@@ -8,6 +8,7 @@ import { nanoid } from 'nanoid'
 import { DeepPartial } from 'typeorm'
 import { ImportItemState } from '../entity/integration'
 import { Recommendation } from '../entity/recommendation'
+import { DEFAULT_SUBSCRIPTION_FOLDER } from '../entity/subscription'
 import { env } from '../env'
 import {
   ArticleSavingRequestStatus,
@@ -237,6 +238,7 @@ export const enqueueParseRequest = async ({
   savedAt,
   publishedAt,
   folder,
+  rssFeedUrl,
 }: {
   url: string
   userId: string
@@ -250,6 +252,7 @@ export const enqueueParseRequest = async ({
   savedAt?: Date
   publishedAt?: Date
   folder?: string
+  rssFeedUrl?: string
 }): Promise<string> => {
   const { GOOGLE_CLOUD_PROJECT } = process.env
   const payload = {
@@ -263,6 +266,7 @@ export const enqueueParseRequest = async ({
     savedAt,
     publishedAt,
     folder,
+    rssFeedUrl,
   }
 
   // If there is no Google Cloud Project Id exposed, it means that we are in local environment
@@ -622,7 +626,8 @@ export interface RssSubscriptionGroup {
   fetchedDates: (Date | null)[]
   scheduledDates: Date[]
   checksums: (string | null)[]
-  addToLibraryFlags: boolean[]
+  fetchContents: boolean[]
+  folders: string[]
 }
 
 export const enqueueRssFeedFetch = async (
@@ -640,7 +645,8 @@ export const enqueueRssFeedFetch = async (
       timestamp.getTime()
     ), // unix timestamp in milliseconds
     userIds: subscriptionGroup.userIds,
-    addToLibraryFlags: subscriptionGroup.addToLibraryFlags,
+    fetchContents: subscriptionGroup.fetchContents,
+    folders: subscriptionGroup.folders,
   }
 
   // If there is no Google Cloud Project Id exposed, it means that we are in local environment

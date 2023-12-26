@@ -4,7 +4,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { createHmac } from 'crypto'
-import { Subscription } from '../entity/subscription'
+import {
+  EXISTING_NEWSLETTER_FOLDER,
+  NewsletterEmail,
+} from '../entity/newsletter_email'
+import {
+  DEFAULT_SUBSCRIPTION_FOLDER,
+  Subscription,
+} from '../entity/subscription'
 import { env } from '../env'
 import {
   Article,
@@ -124,6 +131,7 @@ import {
   validateUsernameResolver,
   webhookResolver,
   webhooksResolver,
+  updateNewsletterEmailResolver,
 } from './index'
 import { markEmailAsItemResolver, recentEmailsResolver } from './recent_emails'
 import { recentSearchesResolver } from './recent_searches'
@@ -219,6 +227,7 @@ export const functionResolvers = {
     updateFilter: updateFilterResolver,
     updateEmail: updateEmailResolver,
     moveToFolder: moveToFolderResolver,
+    updateNewsletterEmail: updateNewsletterEmailResolver,
   },
   Query: {
     me: getMeUserResolver,
@@ -318,6 +327,19 @@ export const functionResolvers = {
     wordsCount(article: { wordCount?: number; content?: string }) {
       if (article.wordCount) return article.wordCount
       return article.content ? wordsCount(article.content) : undefined
+    },
+    async labels(
+      article: { id: string; labels?: Label[]; labelNames?: string[] | null },
+      _: unknown,
+      ctx: WithDataSourcesContext
+    ) {
+      if (article.labels) return article.labels
+
+      if (article.labelNames && article.labelNames.length > 0) {
+        return findLabelsByLibraryItemId(article.id, ctx.uid)
+      }
+
+      return []
     },
   },
   Highlight: {
@@ -425,6 +447,21 @@ export const functionResolvers = {
         subscription.icon && createImageProxyUrl(subscription.icon, 128, 128)
       )
     },
+    folder(subscription: Subscription) {
+      return (
+        subscription.folder ||
+        subscription.newsletterEmail?.folder ||
+        DEFAULT_SUBSCRIPTION_FOLDER
+      )
+    },
+  },
+  NewsletterEmail: {
+    subscriptionCount(newsletterEmail: NewsletterEmail) {
+      return newsletterEmail.subscriptions?.length || 0
+    },
+    folder(newsletterEmail: NewsletterEmail) {
+      return newsletterEmail.folder || EXISTING_NEWSLETTER_FOLDER
+    },
   },
   ...resultResolveTypeResolver('Login'),
   ...resultResolveTypeResolver('LogOut'),
@@ -517,4 +554,7 @@ export const functionResolvers = {
   ...resultResolveTypeResolver('SetFavoriteArticle'),
   ...resultResolveTypeResolver('UpdateSubscription'),
   ...resultResolveTypeResolver('UpdateEmail'),
+  ...resultResolveTypeResolver('ScanFeeds'),
+  ...resultResolveTypeResolver('MoveToFolder'),
+  ...resultResolveTypeResolver('UpdateNewsletterEmail'),
 }
