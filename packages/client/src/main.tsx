@@ -33,7 +33,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       {
-        path: '/rss',
+        path: '/rss/:id',
         element: <RssSubscribedPage />,
       },
     ],
@@ -51,9 +51,7 @@ const router = createBrowserRouter([
 ])
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <FluentProvider theme={teamsLightTheme}>
-      <RouterProvider router={router} />
-    </FluentProvider>
-  </React.StrictMode>,
+  <FluentProvider theme={teamsLightTheme}>
+    <RouterProvider router={router} />
+  </FluentProvider>,
 )

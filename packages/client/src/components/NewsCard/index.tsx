@@ -25,7 +25,7 @@ export default (props: IProps) => {
         <Text variant="tiny" className={styles.date}>
           {node.createdAt}
         </Text>
-        <Text variant="medium" block>
+        <Text variant="medium" block className={styles.title}>
           {node.title}
         </Text>
         <Text variant="xSmall" block className={styles.content}>

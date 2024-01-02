@@ -23,6 +23,7 @@ import { env } from '../env'
 import { PageType, PreparedDocumentInput } from '../generated/graphql'
 import { userRepository } from '../repository/user'
 import { ArticleFormat } from '../resolvers/article'
+import Url from 'url'
 import {
   EmbeddedHighlightData,
   findEmbeddedHighlight,
@@ -76,7 +77,7 @@ const ARTICLE_PREFIX = 'omnivore:'
 
 export const FAKE_URL_PREFIX = 'https://omnivore.app/no_url?q='
 export const RSS_PARSER_CONFIG = {
-  timeout: 5000, // 5 seconds
+  timeout: 50000, // 5 seconds
   headers: {
     // some rss feeds require user agent
     'User-Agent':
@@ -518,26 +519,26 @@ export const parseEmailAddress = (from: string): addressparser.EmailAddress => {
   return { name: '', address: from }
 }
 
-export const fetchFavicon = async (
-  url: string
-): Promise<string | undefined> => {
-  // don't fetch favicon for fake urls
-  if (url.startsWith(FAKE_URL_PREFIX)) return undefined
-  try {
-    // get the correct url if it's a redirect
-    const response = await axios.head(url, { timeout: 5000 })
-    const realUrl = response.request.res.responseUrl
-    const domain = new URL(realUrl).hostname
-    return `https://api.faviconkit.com/${domain}/128`
-  } catch (e) {
-    if (axios.isAxiosError(e)) {
-      logger.info('failed to get favicon', e.response)
-    } else {
-      logger.info('failed to get favicon', e)
-    }
-    return undefined
-  }
-}
+// export const fetchFavicon = async (
+//   url: string
+// ): Promise<string | undefined> => {
+//   // don't fetch favicon for fake urls
+//   if (url.startsWith(FAKE_URL_PREFIX)) return undefined
+//   try {
+//     // get the correct url if it's a redirect
+//     const response = await axios.head(url, { timeout: 5000 })
+//     const realUrl = response.request.res.responseUrl
+//     const domain = new URL(realUrl).hostname
+//     return `https://api.faviconkit.com/${domain}/128`
+//   } catch (e) {
+//     if (axios.isAxiosError(e)) {
+//       logger.info('failed to get favicon', e.response)
+//     } else {
+//       logger.info('failed to get favicon', e)
+//     }
+//     return undefined
+//   }
+// }
 
 // custom transformer to wrap <span class="highlight"> tags in markdown highlight tags `==`
 export const highlightTranslators: TranslatorConfigObject = {
@@ -846,5 +847,117 @@ export const parseFeed = async (
   } catch (error) {
     logger.error('Error parsing feed', error)
     return null
+  }
+}
+
+export async function parseRSS(url: string) {
+  let result: any
+  let rssParser = new Parser()
+  try {
+    result = await axios.get(url, {
+      withCredentials: true,
+      responseType: 'arraybuffer',
+    })
+  } catch {
+    throw new Error('networkError')
+  }
+  if (result && result.status === 200) {
+    try {
+      return await rssParser.parseString(await decodeFetchResponse(result))
+    } catch (error) {
+      throw new Error('parseError')
+    }
+  } else {
+    throw new Error(result.status + ' ' + result.statusText)
+  }
+}
+
+const CHARSET_RE = /charset=([^()<>@,;:\"/[\]?.=\s]*)/i
+const XML_ENCODING_RE = /^<\?xml.+encoding="(.+?)".*?\?>/i
+
+export async function decodeFetchResponse(response: any, isHTML = false) {
+  const buffer = response.data
+  let ctype: any =
+    response.headers['content-type'] && response.headers['content-type']
+  let charset: any =
+    ctype && CHARSET_RE.test(ctype) ? CHARSET_RE.exec(ctype)![1] : undefined
+  let content = new TextDecoder(charset).decode(buffer)
+  if (charset === undefined) {
+    if (isHTML) {
+      const dom = parseHTML(content).document
+      charset = dom
+        .querySelector('meta[charset]')
+        ?.getAttribute('charset')
+        ?.toLowerCase()
+      if (!charset) {
+        ctype = dom
+          .querySelector("meta[http-equiv='Content-Type']")
+          ?.getAttribute('content')
+        charset =
+          ctype &&
+          CHARSET_RE.test(ctype) &&
+          CHARSET_RE.exec(ctype)![1].toLowerCase()
+      }
+    } else {
+      charset =
+        XML_ENCODING_RE.test(content) &&
+        XML_ENCODING_RE.exec(content)![1].toLowerCase()
+    }
+    if (charset && charset !== 'utf-8' && charset !== 'utf8') {
+      content = new TextDecoder(charset).decode(buffer)
+    }
+  }
+  return content
+}
+
+export async function fetchFavicon(url: string) {
+  try {
+    url = url.split('/').slice(0, 3).join('/')
+    let result = await axios.get(url, { withCredentials: true })
+    if (result.status === 200) {
+      let html = result.data
+      let dom = parseHTML(html).document
+      let links: any = dom.getElementsByTagName('link')
+      for (let link of links) {
+        let rel = link.getAttribute('rel')
+        if (
+          (rel === 'icon' || rel === 'shortcut icon') &&
+          link.hasAttribute('href')
+        ) {
+          let href = link.getAttribute('href')
+          let parsedUrl = Url.parse(url)
+          if (href.startsWith('//')) return parsedUrl.protocol + href
+          else if (href.startsWith('/')) return url + href
+          else return href
+        }
+      }
+    }
+    url = url + '/favicon.ico'
+    if (await validateFavicon(url)) {
+      return url
+    } else {
+      return null
+    }
+  } catch (error) {
+    console.log('1111', error)
+    return null
+  }
+}
+
+export async function validateFavicon(url: string) {
+  let flag = false
+  try {
+    const result = await axios.get(url, {
+      withCredentials: true,
+    })
+    if (
+      result.status === 200 &&
+      result.headers['content-type'] &&
+      result.headers['content-type'].startsWith('image')
+    ) {
+      flag = true
+    }
+  } finally {
+    return flag
   }
 }

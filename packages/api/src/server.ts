@@ -36,6 +36,7 @@ import { userServiceRouter } from './routers/svc/user'
 import { webhooksServiceRouter } from './routers/svc/webhooks'
 import { textToSpeechRouter } from './routers/text_to_speech'
 import { userRouter } from './routers/user_router'
+import { subscriptionRouter } from './routers/subscription_router'
 import { sentryConfig } from './sentry'
 import {
   getClaimsByToken,
@@ -56,9 +57,9 @@ export const createApp = (): {
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  Sentry.init(sentryConfig)
-  app.use(Sentry.Handlers.requestHandler())
-  app.use(Sentry.Handlers.tracingHandler())
+  // Sentry.init(sentryConfig)
+  // app.use(Sentry.Handlers.requestHandler())
+  // app.use(Sentry.Handlers.tracingHandler())
 
   app.use(cookieParser())
   app.use(json({ limit: '100mb' }))
@@ -120,6 +121,7 @@ export const createApp = (): {
   app.use('/api/text-to-speech', textToSpeechRouter())
   app.use('/api/notification', notificationRouter())
   app.use('/api/integration', integrationRouter())
+  app.use('/api/subscription',subscriptionRouter())
   app.use('/svc/pubsub/content', contentServiceRouter())
   app.use('/svc/pubsub/links', linkServiceRouter())
   app.use('/svc/pubsub/newsletters', newsletterServiceRouter())

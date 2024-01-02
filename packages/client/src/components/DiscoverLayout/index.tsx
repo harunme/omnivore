@@ -18,10 +18,10 @@ export default (props: any) => {
               onClick={() => setCollapsed(false)}
               viewBox="0 0 24 24"
               stroke="currentColor"
-              stroke-width="2"
+              strokeWidth="2"
               fill="none"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
               <line x1="3" y1="12" x2="21" y2="12"></line>
               <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -31,10 +31,10 @@ export default (props: any) => {
             <svg
               onClick={() => setCollapsed(true)}
               stroke="currentColor"
-              stroke-width="2"
+              strokeWidth="2"
               fill="none"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               viewBox="0 0 24 24"
             >
               <path d="M19 12H5M12 19l-7-7 7-7"></path>
@@ -51,8 +51,8 @@ export default (props: any) => {
         <div className={styles['side-wrapper']}>
           <div className={styles['side-title']}>订阅源</div>
           <div className={styles['side-menu']}>
-            {subscriptions.map(({ name }) => (
-              <a href="/rss">{name}</a>
+            {subscriptions.map(({ id, name }) => (
+              <a key={id} href={`/rss/${id}`}>{name}</a>
             ))}
           </div>
         </div>
