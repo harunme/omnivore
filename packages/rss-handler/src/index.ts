@@ -242,10 +242,14 @@ const fetchContentAndCreateItem = async (
   try {
     console.log('Creating task', input.url)
     // save page
-    const task = await createCloudTask(CONTENT_FETCH_URL, input)
-    console.log('Created task', task)
+    // const task = await createCloudTask(CONTENT_FETCH_URL, input)
+    const res = axios.post(
+      `${CONTENT_FETCH_URL}?token=${process.env.PUBSUB_VERIFICATION_TOKEN}`,
+      input
+    )
+    console.log('Created task', res)
 
-    return !!task
+    return !!res
   } catch (error) {
     console.error('Error while creating task', error)
     return false
@@ -516,61 +520,59 @@ const processSubscription = async (
   console.log('Updated subscription', updatedSubscription)
 }
 
-export const rssHandler = Sentry.GCPFunction.wrapHttpFunction(
-  async (req, res) => {
-    if (req.query.token !== process.env.PUBSUB_VERIFICATION_TOKEN) {
-      console.log('query does not include valid token')
-      return res.sendStatus(403)
+export const rssHandler = async (req: any, res: any) => {
+  if (req.query.token !== process.env.PUBSUB_VERIFICATION_TOKEN) {
+    console.log('query does not include valid token')
+    return res.sendStatus(403)
+  }
+
+  try {
+    if (!isRssFeedRequest(req.body)) {
+      console.error('Invalid request body', req.body)
+      return res.status(400).send('INVALID_REQUEST_BODY')
     }
 
-    try {
-      if (!isRssFeedRequest(req.body)) {
-        console.error('Invalid request body', req.body)
-        return res.status(400).send('INVALID_REQUEST_BODY')
-      }
+    const {
+      feedUrl,
+      subscriptionIds,
+      lastFetchedTimestamps,
+      scheduledTimestamps,
+      userIds,
+      lastFetchedChecksums,
+      fetchContents,
+      folders,
+    } = req.body
+    console.log('Processing feed', feedUrl)
 
-      const {
-        feedUrl,
-        subscriptionIds,
-        lastFetchedTimestamps,
-        scheduledTimestamps,
-        userIds,
-        lastFetchedChecksums,
-        fetchContents,
-        folders,
-      } = req.body
-      console.log('Processing feed', feedUrl)
+    const fetchResult = await fetchAndChecksum(feedUrl)
+    const feed = await parseFeed(feedUrl, fetchResult.content)
+    if (!feed) {
+      console.error('Failed to parse RSS feed', feedUrl)
+      return res.status(500).send('INVALID_RSS_FEED')
+    }
 
-      const fetchResult = await fetchAndChecksum(feedUrl)
-      const feed = await parseFeed(feedUrl, fetchResult.content)
-      if (!feed) {
-        console.error('Failed to parse RSS feed', feedUrl)
-        return res.status(500).send('INVALID_RSS_FEED')
-      }
+    console.log('Fetched feed', feed.title, new Date())
 
-      console.log('Fetched feed', feed.title, new Date())
-
-      await Promise.all(
-        subscriptionIds.map((_, i) =>
-          processSubscription(
-            subscriptionIds[i],
-            userIds[i],
-            feedUrl,
-            fetchResult,
-            lastFetchedTimestamps[i],
-            scheduledTimestamps[i],
-            lastFetchedChecksums[i],
-            fetchContents[i],
-            folders[i],
-            feed
-          )
+    await Promise.all(
+      subscriptionIds.map((_, i) =>
+        processSubscription(
+          subscriptionIds[i],
+          userIds[i],
+          feedUrl,
+          fetchResult,
+          lastFetchedTimestamps[i],
+          scheduledTimestamps[i],
+          lastFetchedChecksums[i],
+          fetchContents[i],
+          folders[i],
+          feed
         )
       )
+    )
 
-      res.send('ok')
-    } catch (e) {
-      console.error('Error while saving RSS feeds', e)
-      res.status(500).send('INTERNAL_SERVER_ERROR')
-    }
+    res.send('ok')
+  } catch (e) {
+    console.error('Error while saving RSS feeds', e)
+    res.status(500).send('INTERNAL_SERVER_ERROR')
   }
-)
+}

@@ -12,7 +12,7 @@
     "lint": "eslint src --ext ts,js,tsx,jsx",
     "compile": "tsc",
     "build": "tsc",
-    "start": "functions-framework --target=rssHandler",
+    "start": "ts-node -T ./src/app.ts",
     "dev": "concurrently \"tsc -w\" \"nodemon --watch ./build/ --exec npm run start\""
   },
   "devDependencies": {
@@ -22,7 +22,7 @@
     "nock": "^13.3.4"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "3.1.2",
+    "express": "^4.17.1",
     "@google-cloud/tasks": "^4.0.0",
     "@sentry/serverless": "^7.77.0",
     "axios": "^1.4.0",
