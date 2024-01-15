@@ -6,7 +6,13 @@ import * as jwt from 'jsonwebtoken'
 import { parseHTML } from 'linkedom'
 import Parser, { Item } from 'rss-parser'
 import { promisify } from 'util'
-import { CONTENT_FETCH_URL, createCloudTask } from './task'
+
+const CONTENT_FETCH_URL = 'http://127.0.0.1:9091'
+const PUBSUB_VERIFICATION_TOKEN = '123456'
+
+const INTERNAL_SVC_ENDPOINT = 'http://localhost:4000/'
+const REST_BACKEND_ENDPOINT = 'http://localhost:4000/api'
+const JWT_SECRET = 'some_secret'
 
 type FolderType = 'following' | 'inbox'
 
@@ -60,19 +66,6 @@ const getThumbnail = (item: RssFeedItem) => {
 
   return item['media:content']?.find((media) => media.$.medium === 'image')?.$
     .url
-}
-
-function isRssFeedRequest(body: any): body is RssFeedRequest {
-  return (
-    'subscriptionIds' in body &&
-    'feedUrl' in body &&
-    'lastFetchedTimestamps' in body &&
-    'scheduledTimestamps' in body &&
-    'userIds' in body &&
-    'lastFetchedChecksums' in body &&
-    'fetchContents' in body &&
-    'folders' in body
-  )
 }
 
 export const fetchAndChecksum = async (url: string) => {
@@ -150,11 +143,8 @@ const sendUpdateSubscriptionMutation = async (
   lastFetchedChecksum: string,
   scheduledAt: Date
 ) => {
-  const JWT_SECRET = process.env.JWT_SECRET
-  const REST_BACKEND_ENDPOINT = process.env.REST_BACKEND_ENDPOINT
-
   if (!JWT_SECRET || !REST_BACKEND_ENDPOINT) {
-    throw 'Environment not configured correctly'
+    throw 'Environment not configured correctly1111'
   }
 
   const data = JSON.stringify({
@@ -212,10 +202,11 @@ const createTask = async (
   feedUrl: string,
   item: RssFeedItem,
   fetchContent: boolean,
-  folder: FolderType
+  folder: FolderType,
+  subscriptionId: string
 ) => {
   if (folder === 'following' && !fetchContent) {
-    return createItemWithPreviewContent(userId, feedUrl, item)
+    return createItemWithPreviewContent(userId, feedUrl, item, subscriptionId)
   }
 
   return fetchContentAndCreateItem(userId, feedUrl, item, folder)
@@ -243,8 +234,8 @@ const fetchContentAndCreateItem = async (
     console.log('Creating task', input.url)
     // save page
     // const task = await createCloudTask(CONTENT_FETCH_URL, input)
-    const res = axios.post(
-      `${CONTENT_FETCH_URL}?token=${process.env.PUBSUB_VERIFICATION_TOKEN}`,
+    const res = await axios.post(
+      `${CONTENT_FETCH_URL}?token=${PUBSUB_VERIFICATION_TOKEN}`,
       input
     )
     console.log('Created task', res)
@@ -259,7 +250,8 @@ const fetchContentAndCreateItem = async (
 const createItemWithPreviewContent = async (
   userId: string,
   feedUrl: string,
-  item: RssFeedItem
+  item: RssFeedItem,
+  subscriptionId: string
 ) => {
   const input = {
     userIds: [userId],
@@ -274,22 +266,25 @@ const createItemWithPreviewContent = async (
     publishedAt: item.isoDate,
     previewContentType: 'text/html', // TODO: get content type from feed
     thumbnail: getThumbnail(item),
+    subscriptionId,
   }
 
   try {
     console.log('Creating task', input.url)
-    const serviceBaseUrl = process.env.INTERNAL_SVC_ENDPOINT
-    const token = process.env.PUBSUB_VERIFICATION_TOKEN
+    const serviceBaseUrl = INTERNAL_SVC_ENDPOINT
+    const token = PUBSUB_VERIFICATION_TOKEN
     if (!serviceBaseUrl || !token) {
       throw 'Environment not configured correctly'
     }
 
     // save page
     const taskHandlerUrl = `${serviceBaseUrl}svc/following/save?token=${token}`
-    const task = await createCloudTask(taskHandlerUrl, input)
-    console.log('Created task', task)
+    const res = await axios.post(taskHandlerUrl, input)
+    console.log('resres', res)
+    // const task = await createCloudTask(taskHandlerUrl, input)
+    // console.log('Created task', task)
 
-    return !!task
+    return res
   } catch (error) {
     console.error('Error while creating task', error)
     return false
@@ -400,6 +395,7 @@ const processSubscription = async (
   let lastItemFetchedAt: Date | null = null
   let lastValidItem: Item | null = null
 
+  console.log('processSubscription')
   if (fetchResult.checksum === lastFetchedChecksum) {
     console.log('feed has not been updated', feedUrl, lastFetchedChecksum)
     return
@@ -411,20 +407,25 @@ const processSubscription = async (
 
   const feedLastBuildDate = feed.lastBuildDate
   console.log('Feed last build date', feedLastBuildDate)
-  if (
-    feedLastBuildDate &&
-    new Date(feedLastBuildDate) <= new Date(lastFetchedAt)
-  ) {
-    console.log('Skipping old feed', feedLastBuildDate)
-    return
-  }
+  // if (
+  //   feedLastBuildDate &&
+  //   new Date(feedLastBuildDate) <= new Date(lastFetchedAt)
+  // ) {
+  //   console.log('Skipping old feed', feedLastBuildDate)
+  //   return
+  // }
 
   // save each item in the feed
   for (const item of feed.items) {
     // use published or updated if isoDate is not available for atom feeds
     item.isoDate =
       item.isoDate || item.published || item.updated || item.created
-    console.log('Processing feed item', item.links, item.isoDate, feed.feedUrl)
+    console.log(
+      'Processing feed item',
+      item.links?.length,
+      item.isoDate,
+      feed.feedUrl
+    )
 
     if (!item.links || item.links.length === 0) {
       console.log('Invalid feed item', item)
@@ -454,17 +455,18 @@ const processSubscription = async (
     }
 
     // skip old items
-    if (isOldItem(item, lastFetchedAt)) {
-      console.log('Skipping old feed item', item.link)
-      continue
-    }
+    // if (isOldItem(item, lastFetchedAt)) {
+    //   console.log('Skipping old feed item', item.link)
+    //   continue
+    // }
 
     const created = await createTask(
       userId,
       feedUrl,
       item,
       fetchContent,
-      folder
+      folder,
+      subscriptionId
     )
     if (!created) {
       console.error('Failed to create task for feed item', item.link)
@@ -480,58 +482,48 @@ const processSubscription = async (
   }
 
   // no items saved
-  if (!lastItemFetchedAt) {
-    // the feed has been fetched before, no new valid items found
-    if (lastFetchedAt || !lastValidItem) {
-      console.log('No new valid items found')
-      return
-    }
+  // if (!lastItemFetchedAt) {
+  //   // the feed has been fetched before, no new valid items found
+  //   if (lastFetchedAt || !lastValidItem) {
+  //     console.log('No new valid items found')
+  //     return
+  //   }
 
-    // the feed has never been fetched, save at least the last valid item
-    const created = await createTask(
-      userId,
-      feedUrl,
-      lastValidItem,
-      fetchContent,
-      folder
-    )
-    if (!created) {
-      console.error('Failed to create task for feed item', lastValidItem.link)
-      throw new Error('Failed to create task for feed item')
-    }
+  //   // the feed has never been fetched, save at least the last valid item
+  //   const created = await createTask(
+  //     userId,
+  //     feedUrl,
+  //     lastValidItem,
+  //     fetchContent,
+  //     folder
+  //   )
+  //   if (!created) {
+  //     console.error('Failed to create task for feed item', lastValidItem.link)
+  //     throw new Error('Failed to create task for feed item')
+  //   }
 
-    lastItemFetchedAt = lastValidItem.isoDate
-      ? new Date(lastValidItem.isoDate)
-      : new Date()
-  }
+  //   lastItemFetchedAt = lastValidItem.isoDate
+  //     ? new Date(lastValidItem.isoDate)
+  //     : new Date()
+  // }
 
   const updateFrequency = getUpdateFrequency(feed)
   const updatePeriodInMs = getUpdatePeriodInHours(feed) * 60 * 60 * 1000
   const nextScheduledAt = scheduledAt + updatePeriodInMs * updateFrequency
 
   // update subscription lastFetchedAt
-  const updatedSubscription = await sendUpdateSubscriptionMutation(
-    userId,
-    subscriptionId,
-    lastItemFetchedAt,
-    updatedLastFetchedChecksum,
-    new Date(nextScheduledAt)
-  )
-  console.log('Updated subscription', updatedSubscription)
+  // const updatedSubscription = await sendUpdateSubscriptionMutation(
+  //   userId,
+  //   subscriptionId,
+  //   lastItemFetchedAt,
+  //   updatedLastFetchedChecksum,
+  //   new Date(nextScheduledAt)
+  // )
+  console.log('Updated subscription', itemCount)
 }
 
-export const rssHandler = async (req: any, res: any) => {
-  if (req.query.token !== process.env.PUBSUB_VERIFICATION_TOKEN) {
-    console.log('query does not include valid token')
-    return res.sendStatus(403)
-  }
-
+export const rssHandler = async (payload: any, res: any) => {
   try {
-    if (!isRssFeedRequest(req.body)) {
-      console.error('Invalid request body', req.body)
-      return res.status(400).send('INVALID_REQUEST_BODY')
-    }
-
     const {
       feedUrl,
       subscriptionIds,
@@ -541,7 +533,7 @@ export const rssHandler = async (req: any, res: any) => {
       lastFetchedChecksums,
       fetchContents,
       folders,
-    } = req.body
+    } = payload
     console.log('Processing feed', feedUrl)
 
     const fetchResult = await fetchAndChecksum(feedUrl)
@@ -554,7 +546,7 @@ export const rssHandler = async (req: any, res: any) => {
     console.log('Fetched feed', feed.title, new Date())
 
     await Promise.all(
-      subscriptionIds.map((_, i) =>
+      subscriptionIds.map((_: any, i: number) =>
         processSubscription(
           subscriptionIds[i],
           userIds[i],
@@ -570,7 +562,7 @@ export const rssHandler = async (req: any, res: any) => {
       )
     )
 
-    res.send('ok')
+    res.status(200).send('ok')
   } catch (e) {
     console.error('Error while saving RSS feeds', e)
     res.status(500).send('INTERNAL_SERVER_ERROR')

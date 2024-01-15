@@ -91,6 +91,10 @@ export const getSubscriptionByName = async (
   })
 }
 
+export const getSubscriptions = async (): Promise<any> => {
+  return getRepository(Subscription).find()
+}
+
 export const saveSubscription = async ({
   userId,
   name,

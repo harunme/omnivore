@@ -1,4 +1,9 @@
 #!/bin/bash
+PGPASSWORD="postgres"
+PG_HOST="127.0.0.1"
+PG_USER="postgres"
+PG_PASSWORD="postgres"
+PG_DB="omnivore"
 
 psql --host $PG_HOST -U $PG_USER -d $PG_DB -c "CREATE USER app_user WITH PASSWORD 'app_pass';"  || true
 echo "created app_user"

@@ -36,7 +36,7 @@ import { userServiceRouter } from './routers/svc/user'
 import { webhooksServiceRouter } from './routers/svc/webhooks'
 import { textToSpeechRouter } from './routers/text_to_speech'
 import { userRouter } from './routers/user_router'
-import { subscriptionRouter } from './routers/subscription_router'
+import { subscriptionRouter } from './routers/subscriptions'
 import { sentryConfig } from './sentry'
 import {
   getClaimsByToken,
@@ -162,7 +162,7 @@ const main = async (): Promise<void> => {
   const { app, apollo, httpServer } = createApp()
 
   await apollo.start()
-  apollo.applyMiddleware({ app, path: '/api/graphql', cors: corsConfig })
+  // apollo.applyMiddleware({ app, path: '/api/graphql', cors: corsConfig })
 
   if (!env.dev.isLocal) {
     const mwLogger = loggers.get('express', { levels: config.syslog.levels })

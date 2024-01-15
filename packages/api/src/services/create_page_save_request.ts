@@ -114,6 +114,7 @@ export const createPageSaveRequest = async ({
   url = cleanUrl(url)
   // look for existing library item
   let libraryItem = await findLibraryItemByUrl(url, userId)
+  console.log('createPageSaveRequest')
   if (!libraryItem) {
     logger.info('libraryItem does not exist', { url })
 

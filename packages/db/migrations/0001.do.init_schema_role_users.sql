@@ -4,6 +4,7 @@
 
 BEGIN;
 
+DROP ROLE IF EXISTS omnivore_user;
 CREATE ROLE omnivore_user;
 CREATE EXTENSION "pgcrypto";
 CREATE EXTENSION "uuid-ossp";

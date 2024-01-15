@@ -815,6 +815,7 @@ export const createLibraryItem = async (
   pubsub = createPubSubClient(),
   skipPubSub = false
 ): Promise<LibraryItem> => {
+  console.log('libraryItemlibraryItemlibraryItem',libraryItem)
   const newLibraryItem = await authTrx(
     async (tx) =>
       tx.withRepository(libraryItemRepository).save({

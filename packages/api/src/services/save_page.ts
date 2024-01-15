@@ -202,6 +202,7 @@ export const savePage = async (
 
 // convert parsed content to an library item
 export const parsedContentToLibraryItem = ({
+  subscriptionId,
   url,
   userId,
   originalHtml,
@@ -221,6 +222,7 @@ export const parsedContentToLibraryItem = ({
   rssFeedUrl,
   folder,
 }: {
+  subscriptionId?: string
   url: string
   userId: string
   slug: string
@@ -242,6 +244,7 @@ export const parsedContentToLibraryItem = ({
 }): DeepPartial<LibraryItem> & { originalUrl: string } => {
   return {
     id: itemId || undefined,
+    subscriptionId: subscriptionId || undefined,
     slug,
     user: { id: userId },
     originalContent: originalHtml,

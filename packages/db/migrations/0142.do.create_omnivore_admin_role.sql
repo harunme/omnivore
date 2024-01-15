@@ -4,6 +4,7 @@
 
 BEGIN;
 
+DROP ROLE IF EXISTS omnivore_admin;
 CREATE ROLE omnivore_admin;
 
 GRANT omnivore_admin TO app_user;

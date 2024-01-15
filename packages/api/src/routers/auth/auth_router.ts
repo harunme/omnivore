@@ -47,6 +47,7 @@ import {
 import { createWebAuthToken } from './jwt_helpers'
 import { createMobileAccountCreationResponse } from './mobile/account_creation'
 import rateLimit from 'express-rate-limit'
+import { LoggingCommon } from '@google-cloud/logging-winston/build/src/common'
 
 export interface SignupRequest {
   email: string
@@ -493,9 +494,9 @@ export function authRouter() {
     cors<express.Request>(corsConfig),
     async (req: express.Request, res: express.Response) => {
       if (!isValidSignupRequest(req.body)) {
-        return res.redirect(
-          `${env.client.url}/auth/email-signup?errorCodes=INVALID_CREDENTIALS`
-        )
+        return res
+          .status(200)
+          .send({ errorCode: LoginErrorCode.InvalidCredentials })
       }
       const { email, password, name, username, bio, pictureUrl } = req.body
       // trim whitespace in email address
@@ -503,7 +504,7 @@ export function authRouter() {
       try {
         // hash password
         const hashedPassword = await hashPassword(password)
-        await createUser({
+        const user = await createUser({
           email: trimmedEmail,
           provider: 'EMAIL',
           sourceUserId: trimmedEmail,
@@ -515,17 +516,18 @@ export function authRouter() {
           pendingConfirmation: true,
         })
 
-        res.redirect(
-          `${env.client.url}/auth/verify-email?message=SIGNUP_SUCCESS`
-        )
+        return res.status(200).send({
+          user: {
+            id: user[0].id,
+            username: user[0].name,
+          },
+        })
       } catch (e) {
         logger.info('email-signup exception:', e)
         if (isErrorWithCode(e)) {
-          return res.redirect(
-            `${env.client.url}/auth/email-signup?errorCodes=${e.errorCode}`
-          )
+          return res.status(200).send({ errorCode: e.errorCode })
         }
-        res.redirect(`${env.client.url}/auth/email-signup?errorCodes=UNKNOWN`)
+        return res.status(200).send({ errorCode: 'UNKNOWN' })
       }
     }
   )

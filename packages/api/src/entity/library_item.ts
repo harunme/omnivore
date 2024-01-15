@@ -44,6 +44,9 @@ export class LibraryItem {
   @PrimaryGeneratedColumn('uuid')
   id!: string
 
+  @Column('text')
+  subscriptionId!: string
+
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user!: User

@@ -33,6 +33,7 @@ export interface SaveFollowingItemRequest {
   publishedAt?: Date
   savedAt?: Date
   thumbnail?: string
+  subscriptionId?: string
 }
 
 function isSaveFollowingItemRequest(
@@ -70,6 +71,7 @@ export function followingServiceRouter() {
       req.body.userIds.length > 0
     ) {
       const userId = req.body.userIds[0]
+      const subscriptionId = req.body.subscriptionId
       logger.info('saving feed item', userId)
 
       const feedUrl = req.body.addedToFollowingBy
@@ -108,6 +110,7 @@ export function followingServiceRouter() {
         parsedResult?.parsedContent?.title || croppedPathname
       )
       const itemToSave = parsedContentToLibraryItem({
+        subscriptionId,
         url,
         title: req.body.title,
         parsedContent: parsedResult?.parsedContent || null,
@@ -129,14 +132,14 @@ export function followingServiceRouter() {
       logger.info('feed item saved in following')
 
       // save RSS label in the item
-      await createAndSaveLabelsInLibraryItem(
-        newItem.id,
-        userId,
-        [{ name: 'RSS' }],
-        feedUrl
-      )
+      // await createAndSaveLabelsInLibraryItem(
+      //   newItem.id,
+      //   userId,
+      //   [{ name: 'RSS' }],
+      //   feedUrl
+      // )
 
-      logger.info('RSS label added to the item')
+      // logger.info('RSS label added to the item')
 
       return res.sendStatus(200)
     }

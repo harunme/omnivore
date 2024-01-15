@@ -14,7 +14,7 @@ export const createPubSubClient = (): PubsubClient => {
 
   const publish = (topicName: string, msg: Buffer): Promise<void> => {
     if (env.dev.isLocal) {
-      logger.info(`Publishing ${topicName}: ${msg.toString()}`)
+      // logger.info(`Publishing ${topicName}: ${msg.toString()}`)
       return Promise.resolve()
     }
 

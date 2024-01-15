@@ -61,7 +61,7 @@ export const saveEmail = async (
   const slug = generateSlug(input.title)
   const metadata = isStubUrl(url) ? undefined : await parseUrlMetadata(url)
   const cleanedUrl = cleanUrl(parseResult.canonicalUrl || url)
-  let siteIcon = parseResult.parsedContent?.siteIcon
+  let siteIcon: any = parseResult.parsedContent?.siteIcon
   if (!siteIcon || isBase64Image(siteIcon)) {
     // fetch favicon if not already set or is a base64 image
     siteIcon = await fetchFavicon(url)

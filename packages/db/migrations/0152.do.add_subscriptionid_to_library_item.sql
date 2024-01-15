@@ -4,4 +4,7 @@
 
 BEGIN;
 
+ALTER TABLE omnivore.library_item
+    ADD COLUMN subscription_id text;
+
 COMMIT;
