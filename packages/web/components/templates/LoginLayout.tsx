@@ -1,4 +1,4 @@
-import { unstable_getImgProps as getImgProps } from 'next/image'
+import unstable_getImgProps from 'next/image'
 import {
   Box,
   HStack,
@@ -8,8 +8,9 @@ import {
 import { LoginForm } from './LoginForm'
 import type { LoginFormProps } from './LoginForm'
 import { OmnivoreNameLogo } from '../elements/images/OmnivoreNameLogo'
-
 import featureFullWidthImage from '../../public/static/images/login/login-feature-image-full.png'
+import { ReactComponentElement } from 'react'
+const getImgProps = unstable_getImgProps;
 
 export function LoginLayout(props: LoginFormProps): JSX.Element {
   return (
@@ -104,7 +105,7 @@ function OmnivoreIllustration() {
   const { props: fullWidthImgProps } = getImgProps({
     src: featureFullWidthImage,
     alt: '',
-  })
+  }) as ReactComponentElement<any>
 
   return (
     <Box
